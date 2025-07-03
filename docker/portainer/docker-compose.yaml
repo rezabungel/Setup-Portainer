@@ -1,0 +1,11 @@
+services:
+  portainer:
+    image: portainer/portainer-ce@sha256:94c3056dbe879f3a3df06b427713392a0962924914f5c2fc557de3797f59f926 # portainer/portainer-ce:2.18.4
+    container_name: portainer
+    ports:
+      - 8000:8000
+      - 9443:9443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer_storage:/data
+    restart: always
