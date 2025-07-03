@@ -1,0 +1,66 @@
+---
+
+- name: "Setup_Portainer"
+  hosts: "{{ target_group }}"
+  gather_facts: no
+
+  tasks:
+
+    - name: "Ensure container '{{ container_name }}' is absent"
+      shell: |
+        if docker ps -a --format '{{ "{{ .Names }}" }}' | grep -q "^{{ container_name }}$"; then
+          docker stop {{ container_name }} && docker rm {{ container_name }}
+        fi
+      args:
+        executable: "/bin/bash"
+      become: true
+
+    - name: "Check if deployment directory exists"
+      stat:
+        path: "{{ deployment_path }}"
+      register: "deployment_dir_check"
+      become: true
+
+    - name: "Create deployment directory if it does not exist"
+      file:
+        path: "{{ deployment_path }}"
+        state: "directory"
+      when: "not deployment_dir_check.stat.exists"
+      become: true
+
+    - name: "Remove existing compose file if deployment directory exists"
+      file:
+        path: "{{ deployment_path }}/docker-compose.yaml"
+        state: "absent"
+      when: "deployment_dir_check.stat.exists"
+      become: true
+
+    - name: "Check if volume directory exists (applies only to 'portainer_server' group)"
+      stat:
+        path: "{{ volume_path }}"
+      register: "volume_dir_check"
+      when: target_group == "portainer_server"
+      become: true
+
+    - name: "Create volume directory if it does not exist (applies only to 'portainer_server' group)"
+      file:
+        path: "{{ volume_path }}"
+        state: "directory"
+      when:
+        - target_group == "portainer_server"
+        - "not volume_dir_check.stat.exists"
+      become: true
+
+    - name: "Deliver docker-compose file to remote host"
+      copy:
+        src: "{{ compose_src_path }}"
+        dest: "{{ compose_dst_path }}"
+      become: true
+
+    - name: "Run docker-compose up"
+      shell: |
+        docker compose -f "{{ compose_dst_path }}" up -d 
+      args:
+        chdir: "{{ deployment_path }}"
+        executable: "/bin/bash"
+      become: true

@@ -1,0 +1,8 @@
+---
+
+deployment_path: "/data/portainer"
+volume_path: "{{ deployment_path }}/portainer_storage"
+compose_src_path: "../docker/portainer/docker-compose.yaml"
+compose_dst_path: "{{ deployment_path }}/docker-compose.yaml"
+
+container_name: "portainer"

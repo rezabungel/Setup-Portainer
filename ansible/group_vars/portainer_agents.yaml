@@ -1,0 +1,7 @@
+---
+
+deployment_path: "/data/portainer_agent"
+compose_src_path: "../docker/agent/docker-compose.yaml"
+compose_dst_path: "{{ deployment_path }}/docker-compose.yaml"
+
+container_name: "portainer_agent"
