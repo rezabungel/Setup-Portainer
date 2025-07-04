@@ -1,0 +1,103 @@
+pipeline {
+    agent { label "${params.jenkins_agent}" }
+
+    parameters {
+        string(name: "jenkins_agent", defaultValue: "ubuntu", trim: true, description: "Select the Jenkins agent")
+        string(name: "branch", defaultValue: "main", trim: true, description: "Git branch containing infrastructure code for Portainer deployment")
+
+        booleanParam(name: "deploy_portainer_server", defaultValue: false, description: "Deploy Portainer server using Ansible; targets defined in hosts.ini")
+        booleanParam(name: "deploy_portainer_agents", defaultValue: false, description: "Deploy Portainer agents using Ansible; targets defined in hosts.ini")
+    }
+
+    environment {
+        GIT_REPOSITORY = "https://github.com/rezabungel/Setup-Portainer.git"
+        PYTHON = "python3.10"
+    }
+
+    stages {
+        stage("Checkout") {
+            steps {
+                echo "Start stage Checkout"
+                git branch: "${params.branch}", url: "${env.GIT_REPOSITORY}"
+                echo "End stage Checkout"
+            }
+        }
+
+        stage('Install Ansible in venv') {
+            when {
+                anyOf {
+                    expression { params.deploy_portainer_server }
+                    expression { params.deploy_portainer_agents }
+                }
+            }
+            steps {
+                echo "Start stage Install Ansible in venv"
+                withPythonEnv("${env.PYTHON}") {
+                    sh '''
+                        python --version
+                        pip -V
+                        pip install -r requirements.txt
+                        ansible --version
+                    '''
+                }
+                echo "End stage Install Ansible in venv"
+            }
+        }
+
+        stage("Deploy portainer server") {
+            when {
+                expression { params.deploy_portainer_server }
+            }
+            environment {
+                SSH_KEY_CRED_ID = "ssh_key_portainer_server"
+                PLAYBOOK_NAME = "playbook.yaml"
+                TARGET_GROUP = "portainer_server"
+            }
+
+            steps {
+                echo "Start stage Deploy portainer server"
+                dir("ansible") {
+                    withCredentials([sshUserPrivateKey (credentialsId: "${env.SSH_KEY_CRED_ID}", keyFileVariable: "SSH_KEY_PATH")]) {
+                        withPythonEnv("${env.PYTHON}") {
+                            sh '''
+                                ansible-playbook ${PLAYBOOK_NAME} -e target_group=${TARGET_GROUP} --private-key ${SSH_KEY_PATH} -v
+                            '''
+                        }
+                    }
+                }
+                echo "End stage Deploy portainer server"
+            }
+        }
+
+        stage("Deploy portainer agents") {
+            when {
+                expression { params.deploy_portainer_agents }
+            }
+            environment {
+                SSH_KEY_CRED_ID = "ssh_key_portainer_agent"
+                PLAYBOOK_NAME = "playbook.yaml"
+                TARGET_GROUP = "portainer_agents"
+            }
+
+            steps {
+                echo "Start stage Deploy portainer agents"
+                dir("ansible") {
+                    withCredentials([sshUserPrivateKey (credentialsId: "${env.SSH_KEY_CRED_ID}", keyFileVariable: "SSH_KEY_PATH")]) {
+                        withPythonEnv("${env.PYTHON}") {
+                            sh '''
+                                ansible-playbook ${PLAYBOOK_NAME} -e target_group=${TARGET_GROUP} --private-key ${SSH_KEY_PATH} -v
+                            '''
+                        }
+                    }
+                }
+                echo "End stage Deploy portainer agents"
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
