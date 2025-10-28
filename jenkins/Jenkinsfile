@@ -6,7 +6,12 @@ pipeline {
         string(name: "branch", defaultValue: "main", trim: true, description: "Git branch containing infrastructure code for Portainer deployment")
 
         booleanParam(name: "deploy_portainer_server", defaultValue: false, description: "Deploy Portainer server using Ansible; targets defined in hosts.ini")
-        booleanParam(name: "deploy_portainer_agents", defaultValue: false, description: "Deploy Portainer agents using Ansible; targets defined in hosts.ini")
+
+        choice(
+            name: "deploy_portainer_agents",
+            choices: ["none", "dev", "test", "prestage", "prod", "all"],
+            description: "Deploy Portainer agents using Ansible; targets defined in hosts.ini. Choose the group to deploy or 'none' to skip deployment."
+        )
     }
 
     environment {
@@ -23,11 +28,11 @@ pipeline {
             }
         }
 
-        stage('Install Ansible in venv') {
+        stage("Install Ansible in venv") {
             when {
                 anyOf {
                     expression { params.deploy_portainer_server }
-                    expression { params.deploy_portainer_agents }
+                    expression { params.deploy_portainer_agents != "none" }
                 }
             }
             steps {
@@ -71,12 +76,12 @@ pipeline {
 
         stage("Deploy portainer agents") {
             when {
-                expression { params.deploy_portainer_agents }
+                expression { params.deploy_portainer_agents != "none" }
             }
             environment {
                 SSH_KEY_CRED_ID = "ssh_key_portainer_agent"
                 PLAYBOOK_NAME = "playbook.yaml"
-                TARGET_GROUP = "portainer_agents"
+                TARGET_GROUP = "${params.deploy_portainer_agents == 'all' ? 'portainer_agents' : params.deploy_portainer_agents}"
             }
 
             steps {
